@@ -10,6 +10,14 @@ class JarvisAgent(BaseAgent):
         content = msg.get("content") or ""
         sender = msg.get("from") or "user"
         depth = int(msg.get("depth") or 0)
+        if msg.get("type") == "write_final":
+            self.relay = False
+            from tools.commit_analyzer import analyze
+            import pathlib
+            report = analyze()
+            path = pathlib.Path(__file__).resolve().parents[1] / "REPORT.md"
+            path.write_text(report)
+            return f"[Jarvis] Perfect satisfaction. Wrote REPORT.md ({len(report)} chars)."
         if not agent_mode_enabled():
             self.relay = False
             return "[Jarvis] Agent Mode is off."

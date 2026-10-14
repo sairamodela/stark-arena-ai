@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from core.arena_client import complete_job, take_job
-from core.message_bus import bus
+from core.message_bus import bus, parse_mention
 import asyncio, pathlib
 
 app = FastAPI()
@@ -87,18 +87,12 @@ async def ws_endpoint(ws: WebSocket):
             thread_id = data.get("thread_id") or "main"
             if thread_id not in ("main", "second"):
                 thread_id = "main"
-            low = content.lower()
-            to = "tony"
-            if "@friday" in low:
-                to = "friday"
-            elif "@jarvis" in low:
-                to = "jarvis"
-            elif "@tony" in low or "@master" in low:
-                to = "tony"
+            to = parse_mention(content) or "tony"
             msg = {
                 "from": "user",
                 "to": to,
                 "thread_id": thread_id,
+                "platform": "local",
                 "type": "user_msg",
                 "content": content,
                 "quote_ref": data.get("quote"),

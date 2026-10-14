@@ -15,7 +15,7 @@ def queue():
         _queue = asyncio.Queue()
     return _queue
 
-async def ask_arena(agent_id, text, timeout=120):
+async def ask_arena(agent_id, text, timeout=240):
     job_id = str(uuid.uuid4())
     future = asyncio.get_running_loop().create_future()
     _futures[job_id] = future
@@ -49,6 +49,7 @@ def complete_job(job_id, reply=None, error=None):
 def channel_prompt(name, sender, content):
     return (
         f"Group channel message from {sender} to {name}:\n{content}\n\n"
-        "Reply in this same channel. Mention @friday, @jarvis, or @tony only when that teammate should answer next. "
-        "Do not use tools unless the message asks you to change the repo."
+        "Reply in this same channel. Mention teammates as @friday, @jarvis, or @tony only — never full bot usernames. "
+        "When the message asks you to review, audit, or find bugs, use read-only tools and report what you actually see. "
+        "Do not edit files unless the message asks you to change the repo."
     )

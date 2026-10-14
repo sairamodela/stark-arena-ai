@@ -1,4 +1,5 @@
 .venv/
+.env
 .arena_cookies
 __pycache__/
 *.pyc

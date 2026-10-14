@@ -8,12 +8,18 @@ Old Arena chats are not used.
 
 | Surface | Address | Role |
 | --- | --- | --- |
-| Local channel | http://127.0.0.1:8000 | The group chat. `#build-room` and `#research-room`. |
+| Local channel | http://127.0.0.1:8001 | The group chat. `#build-room` and `#research-room`. |
 | Tony on Arena | https://arena.ai/agent/01a13957-54c2-74cf-8377-06bcab8df6ea | Max backend for Tony |
 | Friday on Arena | https://arena.ai/agent/01a13957-9105-7495-a49c-14040fefd5b6 | Max backend for Friday |
 | Jarvis on Arena | https://arena.ai/agent/01a13957-a086-7aee-ad4a-5ad834756dfa | Max backend for Jarvis |
 
 Those Arena chats were created with GitHub connected to `sairamodela/ai-tools` on `master`. The model pinned on them is Max (`publicName: max`).
+
+## Telegram room
+
+The same three agents share one Telegram group. All three bots long-poll locally. `thread_id` is the group chat id, so the Telegram chat is the history that survives a restart. Localhost `#build-room` and the Telegram group are bridged on the same bus.
+
+Copy `.env.example` to `.env` and fill the three bot tokens plus `TELEGRAM_GROUP_ID`. In BotFather, disable privacy mode on all three bots (`/setprivacy`) and add them to the group. `YES` writes `REPORT.md`. `No keep working` continues the work.
 
 ## Setup
 
@@ -23,7 +29,7 @@ Python 3.11+ is enough. This machine was run with Python 3.14.
 cd stark-arena-ai
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python main.py
+.venv/bin/python stark.py
 ```
 
 Or, after the virtualenv exists:
@@ -32,7 +38,7 @@ Or, after the virtualenv exists:
 ./run.sh
 ```
 
-Then open http://127.0.0.1:8000. Do not open `chat/client.html` as a file. The page has to be served so the WebSocket host is correct.
+Then open http://127.0.0.1:8001. Do not open `chat/client.html` as a file. The page has to be served so the WebSocket host is correct.
 
 `pip install` pulls FastAPI, Uvicorn, WebSockets, and PyYAML. `openai` is listed in `requirements.txt` and is not called by the live channel.
 
@@ -93,17 +99,17 @@ Arena’s edge blocks plain Python HTTP clients. The signed-in Arena tab is the 
     if (window.__arenaBusy) return;
     window.__arenaBusy = true;
     try {
-      const job = await (await fetch("http://127.0.0.1:8000/arena/job")).json();
+      const job = await (await fetch("http://127.0.0.1:8001/arena/job")).json();
       if (!job || !job.id) return;
       try {
         const reply = await sendArena(job.sessionId, job.text);
-        await fetch("http://127.0.0.1:8000/arena/job", {
+        await fetch("http://127.0.0.1:8001/arena/job", {
           method: "POST",
           headers: {"content-type": "application/json"},
           body: JSON.stringify({id: job.id, reply})
         });
       } catch (err) {
-        await fetch("http://127.0.0.1:8000/arena/job", {
+        await fetch("http://127.0.0.1:8001/arena/job", {
           method: "POST",
           headers: {"content-type": "application/json"},
           body: JSON.stringify({id: job.id, error: String(err)})
@@ -127,7 +133,7 @@ Reload of the Arena tab clears the bridge. Paste it again after a reload.
 
 ```mermaid
 flowchart LR
-  UI["Local chat\nhttp://127.0.0.1:8000"]
+  UI["Local chat\nhttp://127.0.0.1:8001"]
   WS["FastAPI /ws\nchat/server.py"]
   BUS["Message bus\ncore/message_bus.py"]
   T["Tony"]
@@ -161,7 +167,7 @@ One Python process runs the web server and the three agent loops on the same asy
 
 | Piece | File | Job |
 | --- | --- | --- |
-| Process entry | `main.py` | Starts Uvicorn and the three loops. Broadcasts messages addressed to `user`. |
+| Process entry | `stark.py` | Starts Uvicorn, three Telegram pollers, and the three agent loops. Broadcasts agent replies to localhost and Telegram. |
 | Web channel | `chat/server.py`, `chat/client.html` | Page, WebSocket, health, settings, Arena job bridge. |
 | Inboxes | `core/message_bus.py` | One queue per agent, plus a copy of each thread. Memory only. Lost on restart. |
 | Relay rules | `agents/base.py` | After a reply, forwards a new `@tony`, `@friday`, or `@jarvis` once. |
@@ -240,8 +246,8 @@ An agent frame looks like:
 ## Project layout
 
 ```text
-main.py                     process entry
-run.sh                      create .venv if needed, then run main.py
+stark.py                    process entry (`python stark.py`)
+run.sh                      create .venv if needed, then run stark.py
 requirements.txt
 README.md                   this file
 .gitignore                  .venv and .arena_cookies
@@ -264,7 +270,7 @@ STARK_TEAM_LOG.md           historical log of that analyzer run
 
 - The Arena tab has to stay open, signed in, and running the bridge. A reload means pasting the bridge again.
 - Replies wait on Max. A quiet reply is a few seconds. A tool run can take the full 120 second budget and then the channel shows an Arena error.
-- The local bus is in memory. Restarting `main.py` clears it. Arena session history is not cleared.
+- The local bus is in memory. Restarting `stark.py` clears it. Arena session history is not cleared.
 - Direct calls from this Python process to `arena.ai` get Cloudflare error 1010. Do not switch the bridge back to `urllib`.
 - If a sentence contains more than one mention, Friday wins, then Jarvis, then Tony.
 - `.arena_cookies` is gitignored leftover from a blocked direct-call attempt. The running path does not read it.

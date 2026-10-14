@@ -1,5 +1,5 @@
 import re
-from core.message_bus import bus
+from core.message_bus import bus, parse_mention
 
 def has_keyword(text, words):
     low = (text or "").lower()
@@ -25,24 +25,24 @@ class BaseAgent:
                 content = await self.handle_mention(msg) or ""
                 depth = int(msg.get("depth") or 0)
                 if self.relay and depth < 2:
-                    low = content.lower()
-                    incoming = (msg.get("content") or "").lower()
-                    for target in ("tony", "friday", "jarvis"):
-                        # Only mentions this agent just added. Quoted @names must not bounce.
-                        if f"@{target}" in low and f"@{target}" not in incoming and target != self.id:
-                            await bus.send(to=target, message={
-                                "from": self.id,
-                                "to": target,
-                                "thread_id": thread_id,
-                                "type": "delegation",
-                                "content": content,
-                                "quote_ref": msg.get("content"),
-                                "depth": depth + 1,
-                            })
+                    target = parse_mention(content)
+                    incoming_target = parse_mention(msg.get("content") or "")
+                    if target and target != self.id and target != incoming_target:
+                        await bus.send(to=target, message={
+                            "from": self.id,
+                            "to": target,
+                            "thread_id": thread_id,
+                            "platform": msg.get("platform"),
+                            "type": "delegation",
+                            "content": content,
+                            "quote_ref": msg.get("content"),
+                            "depth": depth + 1,
+                        })
                 await bus.send(to="user", message={
                     "from": self.id,
                     "to": "user",
                     "thread_id": thread_id,
+                    "platform": msg.get("platform"),
                     "type": "chat",
                     "content": content,
                     "depth": depth,
@@ -54,11 +54,15 @@ class BaseAgent:
                         "from": self.id,
                         "to": "user",
                         "thread_id": thread_id,
+                        "platform": msg.get("platform"),
                         "type": "chat",
                         "content": f"[{self.name}] hit an error: {exc}",
                     })
                 except Exception as send_exc:
                     print(f"[{self.id}] failed to report error: {send_exc}", flush=True)
+
+    async def run(self):
+        await self.loop()
 
     def quote_and_ask(self, quoted, question):
         return f"> {quoted}\n\n{question}"

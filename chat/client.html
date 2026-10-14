@@ -114,7 +114,7 @@ function send() {
   const content = el.value.trim();
   if (!content) return;
   if (!ws || ws.readyState !== 1) {
-    history[thread].push({from:'tony', content:'Not connected. Start the server and open http://127.0.0.1:8000'});
+    history[thread].push({from:'tony', content:'Not connected. Start the server and open http://127.0.0.1:8001'});
     render();
     return;
   }
@@ -126,7 +126,7 @@ function send() {
 
 function connect() {
   if (location.protocol === 'file:') {
-    setConn('OPEN localhost:8000', false);
+    setConn('OPEN localhost:8001', false);
     return;
   }
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');

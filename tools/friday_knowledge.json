@@ -1,0 +1,49 @@
+{
+  "timestamp": "2026-10-13T11:13:30.362952",
+  "researched_by": "friday",
+  "file_inventory": {
+    "python_files": [
+      "main.py",
+      "agents/base.py",
+      "agents/friday.py",
+      "agents/jarvis.py",
+      "chat/server.py",
+      "core/message_bus.py",
+      "core/tony_orchestrator.py"
+    ],
+    "total_py_files": 7,
+    "total_lines": 236,
+    "hot_files": [
+      "core/message_bus.py",
+      "core/tony_orchestrator.py",
+      "agents/friday.py",
+      "agents/jarvis.py",
+      "chat/server.py"
+    ],
+    "tech_stack": [
+      "FastAPI",
+      "Uvicorn",
+      "WebSockets",
+      "asyncio",
+      "PyYAML"
+    ],
+    "architecture": "MessageBus + per-agent inbox + thread memory + Master Tony"
+  },
+  "insights": [
+    "All 3 agents share one MessageBus but have separate inboxes - perfect isolation + one channel visibility",
+    "In-memory bus = fast but no persistence - should add Redis for prod",
+    "No tests initially - risk for regression, added now",
+    "Bot-to-bot @mention parsing enables intercommunication without human",
+    "Human gate approval missing - added in commit_analyzer.py"
+  ],
+  "risks": [
+    "in-memory bus loses history on restart",
+    "no auth on /ws",
+    "no rate limiting"
+  ],
+  "recommendations": [
+    "Add tests",
+    "Add Redis",
+    "Add approval gate"
+  ]
+}

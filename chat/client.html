@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Stark Arena - Tony + Friday + Jarvis</title>
+<style>
+body{background:#0a0a0a;color:#eee;font-family:monospace;margin:0;display:flex;height:100vh}
+.sidebar{width:240px;background:#111;border-right:1px solid #222;padding:16px;box-sizing:border-box}
+button.channel{display:block;width:100%;text-align:left;color:inherit;font:inherit;background:transparent;padding:10px;margin:6px 0;border-radius:8px;cursor:pointer;border:1px solid #222}
+button.channel.active{background:#1a1a2e;border-color:#8b5cf6}
+.channel .name{font-weight:bold}
+.channel .members{font-size:11px;color:#888}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.header{padding:16px;border-bottom:1px solid #222;display:flex;justify-content:space-between;gap:12px}
+.messages{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column}
+.bubble{margin:8px 0;padding:10px 14px;border-radius:12px;max-width:80%;white-space:pre-wrap;word-break:break-word}
+.user{background:#222;align-self:flex-end;margin-left:auto}
+.tony{background:#2a1a4a;border:1px solid #8b5cf6}
+.friday{background:#0f1a2a;border:1px solid #3b82f6}
+.jarvis{background:#1a1a0a;border:1px solid #eab308}
+.input{padding:12px;border-top:1px solid #222;display:flex;gap:8px}
+.input input{flex:1;background:#111;border:1px solid #333;color:#eee;padding:12px;border-radius:8px;min-width:0}
+button{background:#8b5cf6;color:#fff;border:0;padding:10px 16px;border-radius:8px;cursor:pointer}
+.diagram{font-size:11px;color:#666;padding:8px;background:#0f0f0f;border-top:1px solid #222}
+#conn.on{color:#0f0}
+#conn.off{color:#f66}
+.controls{margin-top:18px;display:flex;flex-direction:column;gap:10px;font-size:12px;color:#bbb}
+.controls label{display:flex;flex-direction:column;gap:4px}
+.controls select{background:#111;color:#eee;border:1px solid #8b5cf6;border-radius:8px;padding:8px}
+.gh{flex-direction:row !important;align-items:center;justify-content:space-between;border:1px solid #333;border-radius:8px;padding:8px}
+.gh input{width:18px;height:18px;accent-color:#0f0}
+.arena-links{margin-top:16px;display:flex;flex-direction:column;gap:6px}
+.arena-links a{color:#c4b5fd;font-size:12px;text-decoration:none;border:1px solid #333;border-radius:8px;padding:8px}
+.arena-links .label{font-size:11px;color:#888}
+@media (max-width:700px){
+  body{flex-direction:column;height:100dvh}
+  .sidebar{width:auto;border-right:0;border-bottom:1px solid #222}
+}
+</style></head>
+<body>
+<div class="sidebar">
+<h3>STARK ARENA</h3>
+<button type="button" class="channel active" data-thread="main" onclick="switchChannel('main')"><div class="name">#build-room</div><div class="members">Tony, Friday, Jarvis</div></button>
+<button type="button" class="channel" data-thread="second" onclick="switchChannel('second')"><div class="name">#research-room</div><div class="members">Tony, Friday, Jarvis</div></button>
+<div class="controls">
+<label>Mode
+<select id="modeSelect">
+<option value="agent" selected>Agent Mode</option>
+<option value="direct">Direct</option>
+</select>
+</label>
+<label class="gh">GitHub <input id="githubToggle" type="checkbox" checked></label>
+<div>socket: <b id="conn" class="off">CONNECTING</b></div>
+<div class="arena-links">
+<div class="label">New Arena chats · Max</div>
+<a href="https://arena.ai/agent/01a13957-54c2-74cf-8377-06bcab8df6ea" target="_blank" rel="noopener">Tony · Max</a>
+<a href="https://arena.ai/agent/01a13957-9105-7495-a49c-14040fefd5b6" target="_blank" rel="noopener">Friday · Max</a>
+<a href="https://arena.ai/agent/01a13957-a086-7aee-ad4a-5ad834756dfa" target="_blank" rel="noopener">Jarvis · Max</a>
+</div>
+</div>
+</div>
+<div class="main">
+<div class="header"><div><b id="chName">#build-room</b> — All 3 in ONE channel</div><div style="font-size:12px;color:#888">Master: Tony</div></div>
+<div class="messages" id="msgs" role="log" aria-live="polite"></div>
+<div class="diagram">Chrome → ws:// this host /ws → FastAPI → MessageBus (thread_id) → Tony / Friday / Jarvis → broadcast → this channel only</div>
+<div class="input"><input id="inp" placeholder="@tony research and build a hello endpoint" autocomplete="off"><button id="sendBtn" type="button">Send</button></div>
+</div>
+<script>
+const history = {
+  main: [
+    {from:'tony', content:'This channel is backed by three new Arena Max chats. Talk here and Tony, Friday, and Jarvis answer each other.'},
+    {from:'friday', content:'Ready — researching mode on.'},
+    {from:'jarvis', content:'Ready — build mode on, sir.'}
+  ],
+  second: [
+    {from:'tony', content:'#research-room is a separate thread. The same three agents answer here, and #build-room stays untouched.'},
+    {from:'friday', content:'Ready to research in this room.'},
+    {from:'jarvis', content:'Ready to build in this room.'}
+  ]
+};
+let thread = 'main';
+let ws = null;
+
+function addBubble(from, txt) {
+  const box = document.getElementById('msgs');
+  const d = document.createElement('div');
+  d.className = 'bubble ' + (from || 'tony');
+  const b = document.createElement('b');
+  b.textContent = '@' + (from === 'user' ? 'You' : (from || 'tony'));
+  d.appendChild(b);
+  d.appendChild(document.createTextNode(' ' + (txt || '')));
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+
+function render() {
+  const box = document.getElementById('msgs');
+  box.replaceChildren();
+  (history[thread] || []).forEach(m => addBubble(m.from, m.content));
+}
+
+function switchChannel(t) {
+  thread = history[t] ? t : 'main';
+  document.getElementById('chName').textContent = thread === 'main' ? '#build-room' : '#research-room';
+  document.querySelectorAll('.channel').forEach(c => c.classList.toggle('active', c.dataset.thread === thread));
+  render();
+}
+
+function setConn(text, on) {
+  const el = document.getElementById('conn');
+  el.textContent = text;
+  el.className = on ? 'on' : 'off';
+}
+
+function send() {
+  const el = document.getElementById('inp');
+  const content = el.value.trim();
+  if (!content) return;
+  if (!ws || ws.readyState !== 1) {
+    history[thread].push({from:'tony', content:'Not connected. Start the server and open http://127.0.0.1:8000'});
+    render();
+    return;
+  }
+  history[thread].push({from:'user', content});
+  addBubble('user', content);
+  ws.send(JSON.stringify({content, thread_id: thread}));
+  el.value = '';
+}
+
+function connect() {
+  if (location.protocol === 'file:') {
+    setConn('OPEN localhost:8000', false);
+    return;
+  }
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  ws.onopen = () => setConn('LIVE', true);
+  ws.onclose = () => setConn('DISCONNECTED', false);
+  ws.onerror = () => setConn('ERROR', false);
+  ws.onmessage = (e) => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch { return; }
+    if (!msg || msg.from === 'user') return;
+    const t = history[msg.thread_id] ? msg.thread_id : 'main';
+    history[t].push({from: msg.from || 'tony', content: msg.content || ''});
+    if (t === thread) addBubble(msg.from || 'tony', msg.content || '');
+  };
+}
+
+document.getElementById('sendBtn').addEventListener('click', send);
+document.getElementById('inp').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') send();
+});
+function applySettings(data) {
+  document.getElementById('modeSelect').value = data.agent_mode ? 'agent' : 'direct';
+  document.getElementById('githubToggle').checked = !!data.github_toggle;
+}
+async function pushSettings() {
+  const agent_mode = document.getElementById('modeSelect').value === 'agent';
+  const github_toggle = document.getElementById('githubToggle').checked;
+  const res = await fetch('/settings', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({agent_mode, github_toggle})
+  });
+  applySettings(await res.json());
+}
+document.getElementById('modeSelect').addEventListener('change', pushSettings);
+document.getElementById('githubToggle').addEventListener('change', pushSettings);
+fetch('/health').then(r => r.json()).then(applySettings).catch(() => {});
+render();
+connect();
+</script>
+</body></html>

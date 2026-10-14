@@ -1,0 +1,7 @@
+agent_mode: true
+github_toggle: true
+master: tony
+agents:
+  friday: researcher
+  jarvis: coder
+all_in_one_channel: true
